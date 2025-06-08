@@ -2,6 +2,45 @@
 
 extern void *memspace;
 
+header *findblock_(
+    header *currHeader,
+    uint32_t numWordsToAllocate,
+    uint32_t currWordPos)
+{
+  // 1 for the header and 1 for at least one word alloc
+  const uint8_t RESERVED = 2;
+  if ((currWordPos + numWordsToAllocate) >
+      (MAX_WORDS - RESERVED))
+  {
+    reterr(ERR_NO_MEM);
+  }
+
+  bool ok = false;
+  if (!(currHeader->w))
+  {
+    // We are at the next available block and
+    // we have already checked for enough space above
+    ok = true;
+  }
+  if (!(currHeader->allocated) &&
+      (currHeader->w >= numWordsToAllocate))
+  {
+    // We are at a block that was once allocated,
+    // and since de-allocated, and the hole is big enough
+    ok = true;
+  }
+
+  if (ok)
+  {
+    return currHeader;
+  }
+
+  // Otherwise we need to continue our search for a suitable block...
+  header *nextHeader = (header *)((char *)currHeader + 4 + currHeader->w * 4);
+  uint32_t nextWordPos = currWordPos + currHeader->w;
+  return findblock_(nextHeader, numWordsToAllocate, nextWordPos);
+}
+
 void *mkalloc(uint32_t numWords, header *hdr)
 {
   void *ret;
@@ -25,35 +64,53 @@ void *mkalloc(uint32_t numWords, header *hdr)
 void *alloc(uint32_t numBytes)
 {
   uint32_t numWords = (numBytes + 3) / 4; // Round up to nearest word
-  header *hdr = (header *)memspace;
   void *mem = memspace;
 
-  if (!(hdr->w))
+  header *hdr = findblock(numWords);
+  if (!hdr)
   {
-    // This is the first allocation
-    // Since we made our own heap in .bss/resb, it will be zero-initialized.
-    mem = mkalloc(numWords, hdr);
-    if (!mem)
-    {
-      return NULL;
-    }
-
-    return mem;
-  }
-  else
-  {
-    // TODO
-    NULL;
+    return NULL;
   }
 
-  return NULL;
+  mem = mkalloc(numWords, hdr);
+  if (!mem)
+  {
+    return NULL;
+  }
+
+  return mem;
+}
+
+void prettyprint_(header *hdr)
+{
+  header *currHeader;
+  void *mem;
+  int32_t n;
+
+  for (n = 1, currHeader = hdr; currHeader->w; mem = (char *)currHeader + ((currHeader->w + 1) * 4), currHeader = mem, n++)
+  {
+    printf("Alloc %d = %d %s words\n",
+           n,
+           currHeader->w,
+           (currHeader->allocated ? "allocated" : "free"));
+  }
+
+  return;
 }
 
 int main(int argc, char *argv[])
 {
-  char *p;
-  p = alloc(7);
-  printf("%p\n", (void *)p);
+  printf("%p (base)\n", memspace);
+
+  void *a = alloc(7);
+  void *b = alloc(2000);
+  void *c = alloc(1);
+
+  printf("%p (alloc a)\n", a);
+  printf("%p (alloc b)\n", b);
+  printf("%p (alloc c)\n", c);
+
+  prettyprint();
 
   return 0;
 }
