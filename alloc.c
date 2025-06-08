@@ -83,19 +83,24 @@ void *alloc(uint32_t numBytes)
 
 void prettyprint_(header *hdr)
 {
-  header *currHeader;
-  void *mem;
-  int32_t n;
+  header *currHeader = hdr;
+  int32_t n = 1;
+  const int32_t max_blocks = 1000000; // safety limit
 
-  for (n = 1, currHeader = hdr; currHeader->w; mem = (char *)currHeader + ((currHeader->w + 1) * 4), currHeader = mem, n++)
+  while (currHeader->w && n <= max_blocks)
   {
-    printf("Alloc %d = %d %s words\n",
+    printf("Alloc %d = %u %s words\n",
            n,
            currHeader->w,
-           (currHeader->allocated ? "allocated" : "free"));
-  }
+           currHeader->allocated ? "allocated" : "free");
 
-  return;
+    currHeader = (header *)((char *)currHeader + sizeof(header) + currHeader->w * 4);
+    n++;
+  }
+  if (n > max_blocks)
+  {
+    printf("...possible heap corruption or too many blocks\n");
+  }
 }
 
 int main(int argc, char *argv[])
